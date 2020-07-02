@@ -3,9 +3,7 @@ The tool is used to import PBF file into postgis as [snapshot schema](https://wi
 
 # Usage
 ```shell script
-    usage: osm2pgsql.py [-h] [-o OSMOSIS] [-H HOST] [-p PORT] [-u USER]
-                    [-w PASSWORD]
-                    pbf dbname
+    usage: osm2pgsql.py [-h] [-o OSMOSIS] [-H HOST] [-p PORT] [-u USER] [-w PASSWORD] pbf dbname
 
     positional arguments:
       pbf                   pbf
