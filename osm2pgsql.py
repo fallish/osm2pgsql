@@ -30,7 +30,8 @@ def pbf2pgsql(args):
 
 def create_database(osmosis_root, args):
     # create database
-    os.putenv('PGPASSWORD', args.password)
+    password = args.password if args.password else os.getenv('PGPASSWORD')
+    os.putenv('PGPASSWORD', password)
     pgsql_args = _format_pgsql_args(args)
 
     _execute(f'dropdb {pgsql_args} --if-exists {args.dbname}')
@@ -149,7 +150,7 @@ def parse_args():
     group.add_argument('-H', '--host', help="database host", default='localhost')
     group.add_argument('-p', '--port', help="database port", default=5432, type=int)
     group.add_argument('-u', '--user', help="database user", default='postgres')
-    group.add_argument('-w', '--password', help="database password", default='docker')
+    group.add_argument('-w', '--password', help="database password")
 
     args = parser.parse_args()
 
