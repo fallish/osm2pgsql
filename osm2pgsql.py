@@ -19,6 +19,8 @@ import stat
 import sys
 import zipfile
 
+import wget
+
 import pgargs
 
 
@@ -130,10 +132,9 @@ def _get_osmosis_remote():
     os.path.exists(osmosis_local_dir) or os.makedirs(osmosis_local_dir)
 
     print(f'Downloading {osmosis_url}')
-    # osmosis = wget.download(osmosis_url, out=osmosis_local_dir)
-    osmosis = os.path.join(osmosis_local_dir, 'osmosis-0.47.zip')
+    osmosis = wget.download(osmosis_url, out=osmosis_local_dir)
     print(f'Downloaded {osmosis_url}')
-    # _execute(f'unzip {osmosis} -d {osmosis_root}')
+
     z = zipfile.ZipFile(osmosis, 'r')
     z.extractall(osmosis_root)
 
