@@ -15,39 +15,51 @@ Prerequisite:
 """
 import glob
 import os
+import stat
 import sys
+import zipfile
+
+import pgargs
 
 
-def pbf2pgsql(args):
+def osm2pgsql(args):
     osmosis_root = get_osmosis_root(args.osmosis)
 
     # create database
-    create_database(osmosis_root, args)
+    create_pg_database(osmosis_root, args)
 
     # import to postgis
     import_pbf(osmosis_root, args)
 
 
-def create_database(osmosis_root, args):
-    # create database
-    password = args.password if args.password else os.getenv('PGPASSWORD')
-    os.putenv('PGPASSWORD', password)
-    pgsql_args = _format_pgsql_args(args)
+def create_pg_database(osmosis_root, args):
+    # NOTE: os.putenv() doesn't work for some platforms like Mac OS.
+    # see details https://docs.python.org/3/library/os.html#process-parameters
+    if args.password:
+        os.environ['PGPASSWORD'] = args.password
+    else:
+        args.password = os.environ['PGPASSWORD']
 
-    _execute(f'dropdb {pgsql_args} --if-exists {args.dbname}')
-    _execute(f'createdb {pgsql_args} {args.dbname}')
-    _execute(f'psql {pgsql_args} -c "CREATE EXTENSION postgis" {args.dbname}')
-    _execute(f'psql {pgsql_args} -c "CREATE EXTENSION hstore" {args.dbname}')
-    _execute(f'psql {pgsql_args} -f {osmosis_root}/script/pgsnapshot_schema_0.6.sql {args.dbname}')
-    _execute(f'psql {pgsql_args} -f {osmosis_root}/script/pgsnapshot_schema_0.6_action.sql {args.dbname}')
-    _execute(f'psql {pgsql_args} -f {osmosis_root}/script/pgsnapshot_schema_0.6_bbox.sql {args.dbname}')
-    _execute(f'psql {pgsql_args} -f {osmosis_root}/script/pgsnapshot_schema_0.6_linestring.sql {args.dbname}')
+    psql_args = pgargs.for_psql(args)
+
+    _execute(f'dropdb {psql_args} --if-exists {args.dbname}')
+    _execute(f'createdb {psql_args} {args.dbname}')
+    _execute(f'psql {psql_args} -c "CREATE EXTENSION postgis" {args.dbname}')
+    _execute(f'psql {psql_args} -c "CREATE EXTENSION hstore" {args.dbname}')
+    _execute(f'psql {psql_args} -f {osmosis_root}/script/pgsnapshot_schema_0.6.sql {args.dbname}')
+    _execute(f'psql {psql_args} -f {osmosis_root}/script/pgsnapshot_schema_0.6_action.sql {args.dbname}')
+    _execute(f'psql {psql_args} -f {osmosis_root}/script/pgsnapshot_schema_0.6_bbox.sql {args.dbname}')
+    _execute(f'psql {psql_args} -f {osmosis_root}/script/pgsnapshot_schema_0.6_linestring.sql {args.dbname}')
 
 
 def import_pbf(osmosis_root, args):
     pbf = get_pbf(args.pbf)
-    pg_args = _format_osmosis_pg_args(args)
-    cmd = f'{osmosis_root}/bin/osmosis --read-pbf {pbf} --sort  --write-pgsql {pg_args}'
+    pg_opts = pgargs.for_osmosis(args)
+
+    osmosis_bin = f'{osmosis_root}/bin/osmosis'
+    os.chmod(osmosis_bin, stat.S_IXUSR | stat.S_IXGRP | os.stat(osmosis_bin).st_mode)
+
+    cmd = f'{osmosis_bin} --read-pbf {pbf} --sort  --write-pgsql {pg_opts}'
     _execute(cmd)
 
 
@@ -62,16 +74,6 @@ def _execute(cmd, default_code=0, exit_on_fail=True):
             return False
 
     return True
-
-
-def _format_osmosis_pg_args(args):
-    # Note: port=xxxx is not supported by osmosis.
-    # return f'database={args.dbname} host={args.host} password={args.password} user={args.user} port={args.port}'
-    return f'database={args.dbname} host={args.host} password={args.password} user={args.user}'
-
-
-def _format_pgsql_args(args):
-    return f'-h {args.host} -p {args.port} -U {args.user}'
 
 
 def get_pbf(pbf):
@@ -116,26 +118,29 @@ def _get_osmosis_local(root=None):
 
 
 def _get_osmosis_remote():
-    # TODO
     # https://wiki.openstreetmap.org/wiki/Osmosis
     # https://bretth.dev.openstreetmap.org/osmosis-build/
 
     # ownload from remote and decompress
 
-    import wget
     osmosis_url = 'https://bretth.dev.openstreetmap.org/osmosis-build/osmosis-0.47.zip'
 
-    osmosis_tmp = '.osmosis'
-    osmosis_root = f'{osmosis_tmp}/osmosis'
-    os.path.exists(osmosis_tmp) or os.makedirs(osmosis_tmp)
+    osmosis_local_dir = '.osmosis'
+    osmosis_root = f'{osmosis_local_dir}/osmosis'
+    os.path.exists(osmosis_local_dir) or os.makedirs(osmosis_local_dir)
 
-    osmosis = wget.download(osmosis_url, out=osmosis_tmp)
-    _execute(f'unzip {osmosis} -d {osmosis_root}')
+    print(f'Downloading {osmosis_url}')
+    # osmosis = wget.download(osmosis_url, out=osmosis_local_dir)
+    osmosis = os.path.join(osmosis_local_dir, 'osmosis-0.47.zip')
+    print(f'Downloaded {osmosis_url}')
+    # _execute(f'unzip {osmosis} -d {osmosis_root}')
+    z = zipfile.ZipFile(osmosis, 'r')
+    z.extractall(osmosis_root)
 
     return os.path.abspath(osmosis_root)
 
 
-def parse_args():
+def parse_args_imp(args):
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -152,15 +157,19 @@ def parse_args():
     group.add_argument('-u', '--user', help="database user", default='postgres')
     group.add_argument('-w', '--password', help="database password")
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=args)
 
     return args
+
+
+def parse_args():
+    return parse_args_imp(sys.argv[1:])
 
 
 def main():
     args = parse_args()
 
-    return pbf2pgsql(args)
+    return osm2pgsql(args)
 
 
 if __name__ == '__main__':
