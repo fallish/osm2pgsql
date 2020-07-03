@@ -27,5 +27,7 @@ The tool is used to import PBF file into postgis as [snapshot schema](https://wi
 ```shell script
     python3 osm2pgsql.py xxx.osm.pbf osmdb_xxx -H localhost -u postgres -w xxx
 ```
->  The password also can be set via environment variable PGPASSWORD 
-> export PGPASSWORD=xxx
+The password also can be set via environment variable PGPASSWORD 
+```shell script
+    export PGPASSWORD=xxx
+```
